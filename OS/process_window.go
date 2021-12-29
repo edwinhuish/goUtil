@@ -1,7 +1,11 @@
+// +build windows
+
 package thuOS
 
 import (
 	"golang.org/x/sys/windows"
+	"os"
+	"path/filepath"
 	"unsafe"
 )
 
@@ -27,3 +31,11 @@ func GetProcessEntry(name string) (*windows.ProcessEntry32, error) {
 	}
 }
 
+func UserHomeDir() string {
+	// TODO 其他系统适配
+	home := os.Getenv("HOMEDRIVE") + os.Getenv("HOMEPATH")
+	if home == "" {
+		home = os.Getenv("USERPROFILE")
+	}
+	return filepath.Join(home, "AppData", "Local")
+}
