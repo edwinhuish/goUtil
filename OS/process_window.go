@@ -32,7 +32,6 @@ func GetProcessEntry(name string) (*windows.ProcessEntry32, error) {
 }
 
 func UserHomeDir() string {
-	// TODO 其他系统适配
 	home := os.Getenv("HOMEDRIVE") + os.Getenv("HOMEPATH")
 	if home == "" {
 		home = os.Getenv("USERPROFILE")
