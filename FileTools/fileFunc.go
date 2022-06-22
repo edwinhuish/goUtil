@@ -44,6 +44,12 @@ func ReadFile(filename string) (val string, err error) {
 	return
 }
 
+func ReadFileStringLines(filename string, handler func(int, string)) (count int, err error) {
+	return ReadFileLines(filename, func(i int, bytes []byte) {
+		handler(i, strings.TrimSpace(string(bytes)))
+	})
+}
+
 /*
 读取文件
 */
