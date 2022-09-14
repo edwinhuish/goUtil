@@ -24,6 +24,33 @@ func CheckFileExist(filename string) bool {
 }
 
 /*
+递归创建文件夹
+*/
+func MakeDir(dirPath string) (err error) {
+	if 0 == len(dirPath) {
+		err = errors.New("empty dir string")
+		return
+	}
+	sep := string(filepath.Separator)
+	for strings.HasSuffix(dirPath, sep) {
+		dirPath = dirPath[:len(dirPath)-len(sep)]
+	}
+	pathArr := strings.Split(dirPath, sep)
+	pathLen := len(pathArr)
+	for i := 2; i <= pathLen; i++ {
+		nowPath := strings.Join(pathArr[:i], sep)
+		if CheckFileExist(nowPath) {
+			continue
+		}
+		err = os.Mkdir(nowPath, 0755) // 系统默认文件夹权限，如果需要别的权限创建后可进行修改
+		if err != nil {
+			return errors.New(nowPath + err.Error())
+		}
+	}
+	return
+}
+
+/*
 读取文件
 */
 func ReadFile(filename string) (val string, err error) {
@@ -303,21 +330,3 @@ func CurFileVer() int64 {
 	return fi.ModTime().Unix()
 }
 
-/*
-递归创建文件夹
-*/
-func MakeDir(dirPath string) {
-	if 0 == len(dirPath) {
-		return
-	}
-	pathArr := strings.Split(dirPath, string(filepath.Separator))
-	pathLen := len(pathArr)
-	for i := 1; i <= pathLen; i++ {
-		nowPath := strings.Join(pathArr[:i], string(filepath.Separator))
-		if CheckFileExist(nowPath) {
-			continue
-		}
-		os.Mkdir(nowPath, 0755) // 系统默认文件夹权限，如果需要别的权限创建后可进行修改
-	}
-	return
-}
