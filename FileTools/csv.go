@@ -3,6 +3,7 @@ package fileFunc
 import (
 	"bytes"
 	"encoding/csv"
+	"golang.org/x/text/encoding/simplifiedchinese"
 	"os"
 )
 
@@ -50,5 +51,18 @@ func ReadCsv(file string) ([][]string, error) {
 	}
 	defer f.Close()
 	reader := csv.NewReader(f)
+	return reader.ReadAll()
+}
+func ReadCsvGB(file string) ([][]string, error) {
+	fd, err := ReadFileByte(file)
+	if err != nil {
+		return nil, err
+	}
+	var bs []byte
+	bs, err = simplifiedchinese.GB18030.NewDecoder().Bytes(fd)
+	if err != nil {
+		return nil, err
+	}
+	reader := csv.NewReader(bytes.NewBuffer(bs))
 	return reader.ReadAll()
 }

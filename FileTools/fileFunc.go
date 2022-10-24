@@ -6,10 +6,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"golang.org/x/text/encoding"
+	"golang.org/x/text/encoding/simplifiedchinese"
+	"golang.org/x/text/encoding/unicode"
 	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
@@ -21,6 +25,13 @@ func CheckFileExist(filename string) bool {
 		return false
 	}
 	return true
+}
+func CheckDirExist(dir string) bool {
+	if d, err := os.Stat(dir); os.IsNotExist(err) {
+		return false
+	} else {
+		return d.IsDir()
+	}
 }
 
 /*
@@ -54,26 +65,43 @@ func MakeDir(dirPath string) (err error) {
 读取文件
 */
 func ReadFile(filename string) (val string, err error) {
-	if !CheckFileExist(filename) {
-		err = errors.New(filename + " is not exist")
-		return
-	}
-	f, err := os.OpenFile(filename, os.O_RDONLY, 0666) // 打开文件
-	if nil != err {
-		return
-	}
-	fd, err := ioutil.ReadAll(f)
-	f.Close()
+	return readFileEncode(filename, nil)
+}
+func ReadFileGB(filename string) (val string, err error) {
+	return readFileEncode(filename, simplifiedchinese.GB18030.NewDecoder())
+}
+func ReadFileUL(filename string) (val string, err error) {
+	return readFileEncode(filename, unicode.UTF16(unicode.LittleEndian, unicode.ExpectBOM).NewDecoder())
+}
+func ReadFileUB(filename string) (val string, err error) {
+	return readFileEncode(filename, unicode.UTF16(unicode.BigEndian, unicode.ExpectBOM).NewDecoder())
+}
+func readFileEncode(filename string, decoder *encoding.Decoder) (val string, err error) {
+	fd, err := ReadFileByte(filename)
 	if err != nil {
 		return
 	}
-	val = string(fd)
+	if decoder == nil {
+		val = string(fd)
+	} else {
+		var bytes []byte
+		bytes, err = decoder.Bytes(fd)
+		if err != nil {
+			return
+		}
+		val = string(bytes)
+	}
 	return
 }
 
 func ReadFileStringLines(filename string, handler func(int, string)) (count int, err error) {
 	return ReadFileLines(filename, func(i int, bytes []byte) {
 		handler(i, strings.TrimSpace(string(bytes)))
+	})
+}
+func ReadFileStringLinesNoTrim(filename string, handler func(int, string)) (count int, err error) {
+	return ReadFileLines(filename, func(i int, bytes []byte) {
+		handler(i, string(bytes))
 	})
 }
 
@@ -89,12 +117,17 @@ func ReadFileLines(filename string, handler func(int, []byte)) (count int, err e
 	if nil != err {
 		return
 	}
+	defer f.Close()
 	buf := bufio.NewReader(f)
 	count = 0
 	for {
 		line, err := buf.ReadBytes('\n')
 		if err != nil {
 			if err == io.EOF {
+				if len(line) > 0 {
+					handler(count, line)
+					count++
+				}
 				return count, nil
 			}
 			return 0, err
@@ -108,7 +141,7 @@ func ReadFileLines(filename string, handler func(int, []byte)) (count int, err e
 /*
 读取byte文件
 */
-func ReadFileByte(filename string) (val []byte) {
+func ReadFileByte(filename string) (val []byte, err error) {
 	if !CheckFileExist(filename) {
 		return
 	}
@@ -117,19 +150,7 @@ func ReadFileByte(filename string) (val []byte) {
 		return
 	}
 	defer f.Close()
-
-	buf := make([]byte, 1024)
-	for {
-		n, err := f.Read(buf)
-		if nil != err && io.EOF != err {
-			return
-		}
-		if 0 == n {
-			break
-		}
-		val = append(val, buf[:n]...)
-	}
-	return
+	return ioutil.ReadAll(f)
 }
 
 /*
@@ -156,38 +177,26 @@ func WriteFile(filename string, value string) (err error) {
 }
 
 func WriteFileCover(filename string, value string) (err error) {
-	os.Remove(filename)
-	if !CheckFileExist(filename) {
-		// 生成文件
-		_, err = os.Create(filename)
-	}
-	f, err := os.OpenFile(filename, os.O_RDWR, 0666) // 打开文件
-	if nil != err {
-		return
-	}
-	defer f.Close()
-	n, err := io.WriteString(f, value)
-	if nil != err {
-		return
-	}
-	if 0 == n {
-		err = errors.New("no byte write")
-	}
-	return
+	return WriteFileTrunc(filename, value)
 }
 
 /*
 写文件,字符类型
 */
 func WriteFileByte(filename string, value []byte) (err error) {
-	if !CheckFileExist(filename) {
-		// 生成文件
-		_, err = os.Create(filename)
-		if err != nil {
-			return
-		}
+	actionFile, err := os.OpenFile(filename, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+	if err != nil {
+		return
 	}
-	err = ioutil.WriteFile(filename, value, 0666)
+	defer actionFile.Close()
+	// 打开文件
+	n, err := actionFile.Write(value)
+	if nil != err {
+		return
+	}
+	if len(value) > n {
+		err = errors.New(fmt.Sprintf("short write: %d (%d)", n, len(value)))
+	}
 	return
 }
 func AppendFileByte(filename string, value []byte) (err error) {
@@ -221,12 +230,18 @@ func NowPath() string {
 	return dir + string(filepath.Separator)
 }
 
-func WriteFileTrunc(actionFilePath, actionValue string) (err error) {
-	if !CheckFileExist(actionFilePath) {
-		// 生成文件
-		_, err = os.Create(actionFilePath)
+func WriteFileCheck(actionFilePath, actionValue string) (err error) {
+	if len(actionValue) == 0 {
+		return
 	}
+	return WriteFileTrunc(actionFilePath, actionValue)
+}
+func WriteFileTrunc(actionFilePath, actionValue string) (err error) {
 	actionFile, err := os.OpenFile(actionFilePath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+	if err != nil {
+		return
+	}
+	defer actionFile.Close()
 	// 打开文件
 	n, err := io.WriteString(actionFile, actionValue)
 	if nil != err {
@@ -236,6 +251,22 @@ func WriteFileTrunc(actionFilePath, actionValue string) (err error) {
 		fmt.Println("no byte write :" + actionFilePath)
 	}
 	return
+}
+func WriteFileGB(actionFilePath, actionValue string) (err error) {
+	return writeFileEncode(actionFilePath, actionValue, simplifiedchinese.GB18030.NewEncoder())
+}
+func WriteFileUL(actionFilePath, actionValue string) (err error) {
+	return writeFileEncode(actionFilePath, actionValue, unicode.UTF16(unicode.LittleEndian, unicode.ExpectBOM).NewEncoder())
+}
+func WriteFileUB(actionFilePath, actionValue string) (err error) {
+	return writeFileEncode(actionFilePath, actionValue, unicode.UTF16(unicode.BigEndian, unicode.ExpectBOM).NewEncoder())
+}
+func writeFileEncode(actionFilePath, actionValue string, encoder *encoding.Encoder) (err error) {
+	bytes, err := encoder.Bytes([]byte(actionValue))
+	if err != nil {
+		return
+	}
+	return WriteFileByte(actionFilePath, bytes)
 }
 
 func ReadJson(value interface{}, file string) (err error) {
@@ -330,3 +361,40 @@ func CurFileVer() int64 {
 	return fi.ModTime().Unix()
 }
 
+func Ext(filePath string) string {
+	i := strings.LastIndex(filePath, ".")
+	if i > 0 && i < len(filePath) {
+		return filePath[i+1:]
+	}
+	return ""
+}
+func GetFileDir(path string) string {
+	substr := string(filepath.Separator)
+	i := strings.LastIndex(path, substr)
+	if i == -1 {
+		return path
+	}
+	return path[:i]
+}
+func GetFileName(path string) string {
+	substr := string(filepath.Separator)
+	i := strings.LastIndex(path, substr)
+	if i == -1 {
+		return path
+	}
+	return path[i+len(substr):]
+}
+func MoveFile(old, new string) error {
+	return os.Rename(old, new)
+}
+func ReadDir(name string) ([]os.FileInfo, error) {
+	f, err := os.Open(name)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	dirs, err := f.Readdir(-1)
+	sort.Slice(dirs, func(i, j int) bool { return dirs[i].Name() < dirs[j].Name() })
+	return dirs, err
+}
