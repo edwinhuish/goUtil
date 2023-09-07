@@ -14,6 +14,7 @@ import (
 	"unsafe"
 )
 
+const win11Ver = 22000
 func GetProcessId(name string) (uint32, error) {
 	snapshot, err := windows.CreateToolhelp32Snapshot(windows.TH32CS_SNAPPROCESS, 0)
 	if err != nil {
@@ -72,6 +73,69 @@ func SetTop(hWnd uint64) {
 	win.SetWindowPos(w, win.HWND_NOTOPMOST, 0, 0, 0, 0, win.SWP_NOSIZE|win.SWP_NOMOVE)
 	win.SetForegroundWindow(w)
 	win.AttachThreadInput(int32(dwCurID), int32(dwForeID), false)
+}
+func GetOSVer() uint32 {
+	ver := windows.RtlGetVersion()
+	if ver != nil {
+		return ver.MajorVersion
+	}
+	return 0
+}
+func GetOSName() (string, error) {
+	ver := windows.RtlGetVersion()
+	if ver != nil {
+		switch ver.MajorVersion {
+		case 0, 1, 2, 3, 4:
+			return "Windows NT", nil
+		case 5:
+			switch ver.MinorVersion {
+			case 0:
+				return "Windows 2000", nil
+			case 1:
+				return "Windows XP", nil
+			case 2:
+				return "Windows Server 2003", nil
+			}
+		case 6:
+			switch ver.MinorVersion {
+			case 0:
+				if ver.ProductType != 1 {
+					return "Windows Server 2008", nil
+				} else {
+					return "Windows Vista", nil
+				}
+			case 1:
+				if ver.ProductType != 1 {
+					return "Windows Server 2008 R2", nil
+				} else {
+					return "Windows 7", nil
+				}
+			case 2:
+				if ver.ProductType != 1 {
+					return "Windows Server 2012", nil
+				} else {
+					return "Windows 8", nil
+				}
+			case 3:
+				if ver.ProductType != 1 {
+					return "Windows Server 2012 R2", nil
+				} else {
+					return "Windows 8.1", nil
+				}
+			}
+		case 10:
+			if ver.BuildNumber >= win11Ver {
+				return "Windows 11", nil
+			}
+			if ver.ProductType != 1 {
+				return "Windows Server 2016", nil
+			} else {
+				return "Windows 10", nil
+			}
+		}
+		return "windows" + strconv.FormatInt(int64(ver.MajorVersion), 10) + "." + strconv.FormatInt(int64(ver.MinorVersion), 10), nil
+	}
+	return "", nil
 }
 
 const (
@@ -182,4 +246,18 @@ func onException(param uintptr) uintptr {
 		up(name)
 	}
 	return 0
+}
+func IsWin7() bool {
+	ver := windows.RtlGetVersion()
+	if ver != nil && ver.MajorVersion < 7 && ver.MinorVersion < 2 { // win8
+		return true
+	}
+	return false
+}
+func IsWin11() bool {
+	ver := windows.RtlGetVersion()
+	if ver != nil && ver.MajorVersion == 10 && ver.BuildNumber >= win11Ver { // win8
+		return true
+	}
+	return false
 }
