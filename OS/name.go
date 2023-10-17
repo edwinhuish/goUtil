@@ -6,6 +6,12 @@ import (
 	"runtime"
 )
 
+const (
+	LeftTop     = 0
+	Center      = 1
+	RightBottom = 2
+)
+
 var log func(string, string)
 var up func(string)
 
