@@ -62,17 +62,44 @@ func GetFocus() uint64 {
 	win.AttachThreadInput(int32(dwForeID), int32(dwCurID), false)
 	return uint64(wnd)
 }
-func SetTop(hWnd uint64) {
-	hForeWnd := win.GetForegroundWindow()
-	dwForeID := win.GetWindowThreadProcessId(hForeWnd, nil)
-	dwCurID := win.GetCurrentThreadId()
-	win.AttachThreadInput(int32(dwCurID), int32(dwForeID), true)
+func SetTop(hWnd uint64) bool {
 	w := win.HWND(hWnd)
-	win.ShowWindow(w, win.SW_SHOWNORMAL)
-	win.SetWindowPos(w, win.HWND_TOPMOST, 0, 0, 0, 0, win.SWP_NOSIZE|win.SWP_NOMOVE)
-	win.SetWindowPos(w, win.HWND_NOTOPMOST, 0, 0, 0, 0, win.SWP_NOSIZE|win.SWP_NOMOVE)
-	win.SetForegroundWindow(w)
-	win.AttachThreadInput(int32(dwCurID), int32(dwForeID), false)
+	if !win.IsWindow(w) {
+		return false
+	}
+	win.ShowWindow(w, win.SW_SHOWNOACTIVATE)
+	i := 4
+	hForeWnd := win.GetForegroundWindow()
+	if uint64(hForeWnd) == hWnd {
+		return true
+	}
+	oldFw := hForeWnd
+	var dwForeID, dwCurID uint32
+	for i > 0 {
+		dwForeID = win.GetWindowThreadProcessId(hForeWnd, nil)
+		dwCurID = win.GetWindowThreadProcessId(w, nil)
+		if dwCurID > 0 && dwForeID > 0 && dwForeID != dwCurID {
+			win.AttachThreadInput(int32(dwForeID), int32(dwCurID), true)
+		}
+		win.SetForegroundWindow(w)
+		win.SwitchToThisWindow(w, false)
+		win.SetWindowPos(w, win.HWND_TOP, 0, 0, 0, 0, win.SWP_NOSIZE|win.SWP_NOMOVE)
+		win.SetActiveWindow(w)
+		win.SetFocus(w)
+		if dwCurID > 0 && dwForeID > 0 && dwForeID != dwCurID {
+			win.AttachThreadInput(int32(dwForeID), int32(dwCurID), false)
+		}
+		hForeWnd = win.GetForegroundWindow()
+		if uint64(hForeWnd) == hWnd {
+			win.SetActiveWindow(w)
+			win.SetFocus(w)
+			break
+		}
+		fmt.Println(oldFw, hForeWnd, hWnd)
+		time.Sleep(10 * time.Millisecond)
+		i--
+	}
+	return true
 }
 func GetOSVer() uint32 {
 	ver := windows.RtlGetVersion()
