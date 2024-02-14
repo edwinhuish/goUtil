@@ -4,7 +4,7 @@ package thuOS
 
 import (
 	fileFunc "github.com/Mengdch/goUtil/FileTools"
-	"github.com/Mengdch/win"
+	"github.com/edwinhuish/win"
 	"golang.org/x/sys/windows"
 	"os"
 	"path/filepath"
