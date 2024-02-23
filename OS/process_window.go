@@ -1,20 +1,24 @@
+//go:build windows
 // +build windows
 
 package thuOS
 
 import (
-	fileFunc "github.com/Mengdch/goUtil/FileTools"
-	"github.com/edwinhuish/win"
-	"golang.org/x/sys/windows"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
 	"syscall"
 	"time"
 	"unsafe"
+
+	fileFunc "github.com/edwinhuish/goUtil/FileTools"
+	"github.com/edwinhuish/win"
+	"golang.org/x/sys/windows"
 )
 
 const win11Ver = 22000
+
 func GetProcessId(name string) (uint32, error) {
 	snapshot, err := windows.CreateToolhelp32Snapshot(windows.TH32CS_SNAPPROCESS, 0)
 	if err != nil {
